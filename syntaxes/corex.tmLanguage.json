@@ -1,0 +1,130 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Corex",
+  "scopeName": "source.corex",
+  "patterns":[
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#yaml-keys" },
+    { "include": "#definitions" },
+    { "include": "#commands" },
+    { "include": "#prefixes" },
+    { "include": "#foreach-as" },
+    { "include": "#types" },
+    { "include": "#tags" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns":[
+        {
+          "begin": "/\\*",
+          "end": "\\*/",
+          "name": "comment.block.corex"
+        },
+        {
+          "match": "(#|//).*$",
+          "name": "comment.line.corex"
+        }
+      ],
+      "lineComment": "//",
+      "blockComment": ["/*", "*/"]
+    },
+    "onEnterRules": [
+        {
+            "beforeText": { "pattern": "^\\s*\\/\\*\\*(?!\\/)([^\\*]|\\*(?!\\/))*$" },
+            "afterText": { "pattern": "^\\s*\\*\\/$" },
+            "action": { "indent": "indentOutdent", "appendText": " * " }
+        },
+        {
+            "beforeText": { "pattern": "^\\s*\\*([^\\/]|\\*(?!\\/))*$" },
+            "action": { "indent": "none", "appendText": "* " }
+        }
+    ],
+    "strings": {
+      "patterns":[
+        {
+          "begin": "\"",
+          "end": "\"",
+          "name": "string.quoted.double.corex",
+          "patterns": [{ "include": "#tags" }]
+        }
+      ]
+    },
+    "yaml-keys": {
+      "match": "^\\s*([a-zA-Z0-9_]+)\\s*:",
+      "captures": {
+        "1": { "name": "entity.name.tag.yaml.corex" }
+      }
+    },
+    "definitions": {
+      "match": "^\\s*-\\s*(def|define)\\s+([a-zA-Z0-9_]+)",
+      "captures": {
+        "1": { "name": "keyword.control.corex" },
+        "2": { "name": "variable.other.readwrite.corex" }
+      }
+    },
+    "foreach-as": {
+      "match": "\\bas:([a-zA-Z0-9_]+)\\b",
+      "captures": {
+        "1": { "name": "variable.other.readwrite.corex" }
+      }
+    },
+    "commands": {
+      "match": "^\\s*-\\s*(~?[a-zA-Z0-9_]+)",
+      "captures": {
+        "1": { "name": "keyword.control.corex" }
+      }
+    },
+    "prefixes": {
+      "match": "\\b([a-zA-Z0-9_.]+):",
+      "captures": {
+        "1": { "name": "variable.parameter.corex" }
+      }
+    },
+    "types": {
+      "match": "\\(([a-zA-Z0-9_]+)\\)",
+      "captures": {
+        "1": { "name": "support.type.corex" }
+      }
+    },
+    "tags": {
+      "begin": "<",
+      "beginCaptures": { "0": { "name": "punctuation.definition.tag.begin.corex" } },
+      "end": ">",
+      "endCaptures": { "0": { "name": "punctuation.definition.tag.end.corex" } },
+      "name": "meta.tag.corex",
+      "patterns":[
+        {
+          "match": "\\G(\\[)([a-zA-Z0-9_]+)(\\])",
+          "captures": {
+            "1": { "name": "punctuation.definition.bracket.begin.corex" },
+            "2": { "name": "variable.other.readwrite.corex" },
+            "3": { "name": "punctuation.definition.bracket.end.corex" }
+          }
+        },
+        {
+          "match": "\\G\\s*([a-zA-Z0-9_]+)",
+          "name": "support.class.corex"
+        },
+        { "include": "#brackets" },
+        {
+          "match": "\\.([a-zA-Z0-9_]+)",
+          "captures": { "1": { "name": "entity.name.function.corex" } }
+        }
+      ]
+    },
+    "brackets": {
+      "begin": "\\[",
+      "beginCaptures": { "0": { "name": "punctuation.definition.bracket.begin.corex" } },
+      "end": "\\]",
+      "endCaptures": { "0": { "name": "punctuation.definition.bracket.end.corex" } },
+      "patterns": [
+        { "include": "#tags" },
+        { "include": "#brackets" },
+        { "include": "#strings" },
+        { "match": "[^<>\\[\\]]+", "name": "variable.other.corex" },
+        { "match": "[<>]", "name": "punctuation.definition.tag.corex" }
+      ]
+    }
+  }
+}

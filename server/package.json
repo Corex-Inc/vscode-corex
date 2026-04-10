@@ -1,0 +1,24 @@
+{
+	"name": "corex-script-server",
+	"description": "Official VSCode extension for Corex Script language.",
+	"version": "1.0.0",
+	"author": "tizis0",
+	"license": "MIT",
+	"engines": {
+		"node": "*"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/Microsoft/vscode-extension-samples"
+	},
+	"dependencies": {
+		"adm-zip": "^0.5.17",
+		"node-fetch": "^3.3.2",
+		"vscode-languageserver": "^9.0.1",
+		"vscode-languageserver-textdocument": "^1.0.11"
+	},
+	"scripts": {},
+	"devDependencies": {
+		"@types/adm-zip": "^0.5.8"
+	}
+}

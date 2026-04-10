@@ -1,0 +1,71 @@
+{
+  "name": "corex-script",
+  "displayName": "Corex",
+  "description": "Official VSCode extension for Corex Script language.",
+  "version": "1.0.0",
+  "publisher": "Corex Inc.",
+  "icon": "icons/corex-logo.png",
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "activationEvents": [],
+  "main": "./client/out/extension.js",
+  "contributes": {
+    "configurationDefaults": {
+      "[corex]": {
+        "editor.wordBasedSuggestions": "off"
+      }
+    },
+    "commands": [
+      {
+        "command": "corex.reloadDocs",
+        "title": "Corex: Reload Documentation"
+      }
+    ],
+    "languages": [
+      {
+        "id": "corex",
+        "aliases": [
+          "Corex",
+          "corex"
+        ],
+        "extensions": [
+          ".cx"
+        ],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./icons/corex-logo.png",
+          "dark": "./icons/corex-logo.png"
+        }
+      }
+    ],
+    "grammars": [
+      {
+        "language": "corex",
+        "scopeName": "source.corex",
+        "path": "./syntaxes/corex.tmLanguage.json"
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -b",
+    "watch": "tsc -b -w"
+  },
+  "dependencies": {
+    "adm-zip": "^0.5.17",
+    "node-fetch": "^3.3.2",
+    "vscode-languageclient": "^9.0.1",
+    "vscode-languageserver": "^9.0.1",
+    "vscode-languageserver-textdocument": "^1.0.12"
+  },
+  "devDependencies": {
+    "@types/adm-zip": "^0.5.8",
+    "@types/node": "^18.19.130",
+    "@types/node-fetch": "^2.6.13",
+    "@types/vscode": "^1.100.0",
+    "typescript": "^5.0.0"
+  }
+}
