@@ -8,8 +8,8 @@
     { "include": "#yaml-keys" },
     { "include": "#definitions" },
     { "include": "#commands" },
-    { "include": "#prefixes" },
     { "include": "#foreach-as" },
+    { "include": "#events-definition" },
     { "include": "#types" },
     { "include": "#tags" }
   ],
@@ -19,11 +19,18 @@
         {
           "begin": "/\\*",
           "end": "\\*/",
-          "name": "comment.block.corex"
+          "name": "comment.block.corex",
+          "patterns":[
+            { "match": "\\b(TODO|FIXME|XXX)\\b", "name": "keyword.todo.corex" }
+          ]
         },
         {
-          "match": "(#|//).*$",
-          "name": "comment.line.corex"
+          "begin": "(//)",
+          "end": "$",
+          "name": "comment.line.corex",
+          "patterns":[
+            { "match": "\\b(TODO|FIXME|XXX)\\b", "name": "keyword.todo.corex" }
+          ]
         }
       ],
       "lineComment": "//",
@@ -75,12 +82,6 @@
         "1": { "name": "keyword.control.corex" }
       }
     },
-    "prefixes": {
-      "match": "\\b([a-zA-Z0-9_.]+):",
-      "captures": {
-        "1": { "name": "variable.parameter.corex" }
-      }
-    },
     "types": {
       "match": "\\(([a-zA-Z0-9_]+)\\)",
       "captures": {
@@ -125,6 +126,13 @@
         { "match": "[^<>\\[\\]]+", "name": "variable.other.corex" },
         { "match": "[<>]", "name": "punctuation.definition.tag.corex" }
       ]
+    },
+    "events-definition": {
+      "match": "^\\s*(on|after)\\b\\s+([^:]+):",
+      "captures": {
+        "1": { "name": "keyword.control.corex" },
+        "2": { "name": "entity.name.function.corex" }
+      }
     }
   }
 }

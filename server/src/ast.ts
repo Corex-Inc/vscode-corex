@@ -53,6 +53,21 @@ export function parseAST(doc: TextDocument): CommandNode[] {
             continue;
         }
 
+        const currentPath = pathStack.map(p => p.name).join('.');
+
+        const evMatch = line.match(/^(\s*)(on|after)\s+(.+?):\s*(?:#.*|\/\/.*)?$/i);
+        if (evMatch && currentPath.includes('events')) {
+            const indent = evMatch[1].length;
+            const node: CommandNode = {
+                name: evMatch[2].toLowerCase(),
+                line: i, endLine: i, endNodeIndex: -1, indent: indent,
+                container: currentContainer, path: currentPath, text: line,
+                definitionsProvided: [], tagsUsed:[], isBlock: true
+            };
+            nodes.push(node);
+            continue;
+        }
+
         const cmdMatch = line.match(/^(\s*)-\s*(~?[a-zA-Z0-9_]+)/);
         if (cmdMatch) {
             const indent = cmdMatch[1].length;

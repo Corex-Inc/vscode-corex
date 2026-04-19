@@ -3,6 +3,7 @@ import { TextDocument } from 'vscode-languageserver-textdocument';
 import { parseAST } from '../ast';
 import { db } from '../database';
 import { resolveTagType, splitTagChain, stripArgs } from '../utils';
+import { eventRegistry } from './events';
 
 class ContainerState {
     definedVars = new Map<string, { line: number, startChar: number, endChar: number, isImplicit: boolean, source: 'def' | 'loop' | 'definition' }>(); 
@@ -132,6 +133,54 @@ export function getDiagnostics(doc: TextDocument): Diagnostic[] {
                                     source: "Corex LSP",
                                     code: finalResult ? "always-true-block" : '',
                                     data: { ifLine: node.line, ifEndLine: node.endLine, ifIndent: node.indent, elseBlocks }
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (node.name === 'on' || node.name === 'after') {
+            const evMatch = node.text.match(/^(\s*)(on|after)\s+(.+?):\s*(?:#.*|\/\/.*)?$/i);
+            if (evMatch) {
+                const eventLine = evMatch[3].trim();
+                const resolved = eventRegistry.resolveEvent(eventLine);
+                if (!resolved) {
+                    diagnostics.push({
+                        severity: DiagnosticSeverity.Error,
+                        range: { start: { line: node.line, character: evMatch[1].length }, end: { line: node.line, character: node.text.length } },
+                        message: `Event not found: '${eventLine}'`,
+                        source: "Corex LSP"
+                    });
+                } else {
+                    for (const sw of resolved.switches) {
+                        const swIdx = node.text.indexOf(sw);
+                        const colonIdx = sw.indexOf(':');
+
+                        if (colonIdx === -1) {
+                            diagnostics.push({
+                                severity: DiagnosticSeverity.Error,
+                                range: { start: { line: node.line, character: swIdx }, end: { line: node.line, character: swIdx + sw.length } },
+                                message: `Invalid switch or trailing word: '${sw}'. Switches must be formatted as 'name:value'.`,
+                                source: "Corex LSP"
+                            });
+                        } else if (sw.endsWith(':')) {
+                            diagnostics.push({
+                                severity: DiagnosticSeverity.Error,
+                                range: { start: { line: node.line, character: swIdx }, end: { line: node.line, character: swIdx + sw.length } },
+                                message: `Empty switch: '${sw}'. You must provide a value.`,
+                                source: "Corex LSP"
+                            });
+                        } else {
+                            const swName = sw.split(':')[0];
+                            const isValid = resolved.meta.parsedSwitches?.some(s => s.name === swName);
+                            if (!isValid) {
+                                diagnostics.push({
+                                    severity: DiagnosticSeverity.Error,
+                                    range: { start: { line: node.line, character: swIdx }, end: { line: node.line, character: swIdx + sw.length } },
+                                    message: `Unknown switch '${swName}' for this event.`,
+                                    source: "Corex LSP"
                                 });
                             }
                         }

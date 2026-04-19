@@ -7,12 +7,40 @@ import * as path from 'path';
 import { pathToFileURL } from 'url';
 import { globalStoragePath } from '../server';
 import * as fs from 'fs';
+import { eventRegistry } from './events';
 
 export function handleDefinition(pos: TextDocumentPositionParams, documents: TextDocuments<TextDocument>): Definition | null {
     const doc = documents.get(pos.textDocument.uri);
     if (!doc) return null;
     const ast = parseAST(doc);
     const offset = doc.offsetAt(pos.position);
+
+    const node = ast.find(n => n.line === pos.position.line);
+    if (!node) return null;
+
+    if (node.name === 'on' || node.name === 'after') {
+        const evMatch = node.text.match(/^(\s*)(on|after)\s+([^:]+):/i);
+        if (evMatch) {
+            const prefixLen = evMatch[1].length + evMatch[2].length + 1;
+            const eventText = evMatch[3];
+            
+            const charInLine = pos.position.character;
+            if (charInLine >= prefixLen && charInLine <= prefixLen + eventText.length) {
+                const resolved = eventRegistry.resolveEvent(eventText.trim());
+                if (resolved && resolved.meta.sourceFile) {
+                    const SRC_DIR = path.join(globalStoragePath, 'corex_src_cache');
+                    const absolutePath = path.resolve(SRC_DIR, resolved.meta.sourceFile);
+                    
+                    if (fs.existsSync(absolutePath)) {
+                        return Location.create(pathToFileURL(absolutePath).toString(), {
+                            start: { line: resolved.meta.sourceLine!, character: 0 },
+                            end: { line: resolved.meta.sourceLine!, character: 0 }
+                        });
+                    }
+                }
+            }
+        }
+    }
     
     const allTags = extractAllTagsGlobal(doc.getText());
     const tags = allTags.filter(t => offset >= t.start - 1 && offset <= t.end + 1);

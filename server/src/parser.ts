@@ -4,6 +4,7 @@ import fetch from 'node-fetch';
 import AdmZip from 'adm-zip';
 import { db, MetaItem } from './database';
 import { globalStoragePath } from './server';
+import { eventRegistry } from './providers/events';
 
 const getCacheFile = () => path.join(globalStoragePath, 'corex_cache.json');
 const getSrcDir = () => path.join(globalStoragePath, 'corex_src_cache');
@@ -21,6 +22,7 @@ export async function loadOrUpdateCache(force = false) {
         metaCache = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'));
     }
     db.build(metaCache);
+    eventRegistry.build();
 }
 
 async function downloadAndParseCorex(url: string): Promise<MetaItem[]> {
@@ -90,10 +92,17 @@ function parseBlock(type: string, blockText: string, sourceFile: string, sourceL
     let buffer: string[] =[];
 
     for (const line of lines) {
-        const cleanLine = line.replace(/^[\s/*]+/, '').trim();
+        let cleanLine = line.trim();
+        if (cleanLine.startsWith('/*')) cleanLine = cleanLine.substring(2).trim();
+        if (cleanLine.endsWith('*/')) cleanLine = cleanLine.substring(0, cleanLine.length - 2).trim();
+        if (cleanLine.startsWith('*')) cleanLine = cleanLine.substring(1).trim();
         
         if (cleanLine.startsWith('@')) {
-            if (currentTag) rawResult[currentTag] = buffer.join('  \n').trim();
+            if (currentTag) {
+                const joined = buffer.join('\n').trim();
+                if (rawResult[currentTag]) rawResult[currentTag] += '\n\n' + joined;
+                else rawResult[currentTag] = joined;
+            }
             const spaceIdx = cleanLine.indexOf(' ');
             if (spaceIdx === -1) {
                 currentTag = cleanLine.substring(1).toLowerCase();
@@ -106,8 +115,12 @@ function parseBlock(type: string, blockText: string, sourceFile: string, sourceL
             buffer.push(cleanLine);
         }
     }
+
+    if (currentTag) {
+        if (rawResult[currentTag]) rawResult[currentTag] += '\n\n' + buffer.join('  \n').trim();
+        else rawResult[currentTag] = buffer.join('  \n').trim();
+    }
     
-    if (currentTag) rawResult[currentTag] = buffer.join('  \n').trim();
     if (!rawResult.name) return[];
 
     let reqArg: 'all' | number[] | undefined = undefined;
@@ -138,6 +151,11 @@ function parseBlock(type: string, blockText: string, sourceFile: string, sourceL
         format: rawResult.format,
         prefix: rawResult.prefix,
         sourceFile,
-        sourceLine
+        sourceLine,
+        events: rawResult.events,
+        switches: rawResult.switches,
+        context: rawResult.context,
+        usage: rawResult.usage,
+        cancellable: rawResult.cancellable !== undefined
     }];
 }

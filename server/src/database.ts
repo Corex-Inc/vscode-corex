@@ -16,22 +16,31 @@ export interface MetaItem {
     sourceFile?: string;
     sourceLine?: number;
     isHiddenFromAutocomplete?: boolean;
+    events?: string;
+    switches?: string;
+    context?: string;
+    cancellable?: boolean;
+    usage?: string;
+    parsedSwitches?: { name: string, desc: string }[];
+    parsedContexts?: { name: string, desc: string, returnType: string }[];
     [key: string]: any;
 }
 
 export class TagDatabase {
     baseObjects: Set<string> = new Set();
     typeMap: Map<string, MetaItem[]> = new Map();
-    commands: MetaItem[] =[];
+    commands: MetaItem[] = [];
     objectDocs: Map<string, MetaItem> = new Map();
     formatters: MetaItem[] = [];
+    events: MetaItem[] = [];
 
     build(metaCache: MetaItem[]) {
         this.baseObjects.clear();
         this.typeMap.clear();
-        this.commands =[];
+        this.commands = [];
         this.objectDocs.clear();
-        this.formatters =[];
+        this.formatters = [];
+        this.events = [];
 
         for (const item of metaCache) {
             if (item.type === 'command') {
@@ -105,6 +114,31 @@ export class TagDatabase {
                     if (!this.typeMap.has(obj)) this.typeMap.set(obj,[]);
                     this.typeMap.get(obj)!.push(item);
                 }
+            } else if (item.type === 'event') {
+                if (item.switches && typeof item.switches === 'string') {
+                    item.parsedSwitches = item.switches.split('\n').map(l => {
+                        const match = l.match(/^([a-zA-Z0-9_]+):/);
+                        return { name: match ? match[1] : l.split(':')[0], desc: l };
+                    });
+                } else {
+                    item.parsedSwitches = [];
+                }
+                if (item.context && typeof item.context === 'string') {
+                    item.parsedContexts = item.context.split('\n').filter(l => l.trim().length > 0).map(l => {
+                        const parts = l.split('-');
+                        let nameStr = parts[0].trim();
+                        const match = nameStr.match(/<context\.([a-zA-Z0-9_]+)>/i);
+                        const name = match ? match[1] : nameStr.replace(/[<>]/g, '').replace('context.', '');
+                        const desc = parts.slice(1).join('-').trim() || l;
+                        
+                        const returnTypeMatch = desc.match(/(?:returns?|returns an?)\s+([a-zA-Z0-9_]+Tag)/i);
+                        const returnType = returnTypeMatch ? returnTypeMatch[1] : 'ElementTag';
+                        return { name, desc, returnType };
+                    });
+                } else {
+                    item.parsedContexts = [];
+                }
+                this.events.push(item);
             }
         }
     }

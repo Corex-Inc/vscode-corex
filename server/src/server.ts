@@ -44,7 +44,7 @@ connection.onRequest("corex/reloadDocs", async () => {
         await loadOrUpdateCache(true);
         return db.typeMap.size;
     } catch (error: any) {
-        throw new Error(error.message || "Неизвестная ошибка при скачивании");
+        throw new Error(error.message || "Unknown ERROR");
     }
 });
 
