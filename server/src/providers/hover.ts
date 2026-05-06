@@ -45,6 +45,24 @@ export function handleHover(pos: TextDocumentPositionParams, documents: TextDocu
         }
     }
 
+    const cmdMatch = node.text.match(/^(\s*)-\s*(~?[a-zA-Z0-9_]+)/);
+    if (cmdMatch) {
+        const cmdNameStart = node.text.indexOf(cmdMatch[2]);
+        const cmdNameEnd = cmdNameStart + cmdMatch[2].length;
+        
+        if (pos.position.character >= cmdNameStart && pos.position.character <= cmdNameEnd) {
+            const cmdMeta = db.getCommand(node.name)
+            if (cmdMeta) {
+                let md = `### Command: ${cmdMeta.name}\n\n`;
+                if (cmdMeta.shortDescription) md += `*${cmdMeta.shortDescription}*\n\n`;
+                if (cmdMeta.syntax) md += `**Syntax:** \`${cmdMeta.syntax}\`\n\n`;
+                if (cmdMeta.description) md += `**Description:**\n${cmdMeta.description.replace(/\n/g, '<br>')}\n\n`;
+                if (cmdMeta.usage) md += `**Examples:**\n\`\`\`corex\n${cmdMeta.usage}\n\`\`\`\n\n`;
+                return { contents: { kind: 'markdown', value: md } };
+            }
+        }
+    }
+
     const tags = node.tagsUsed.filter(t => offset >= t.start - 1 && offset <= t.end + 1);
     if (tags.length === 0) return null;
     tags.sort((a, b) => (a.end - a.start) - (b.end - b.start));

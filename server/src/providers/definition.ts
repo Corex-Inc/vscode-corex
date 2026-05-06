@@ -41,6 +41,26 @@ export function handleDefinition(pos: TextDocumentPositionParams, documents: Tex
             }
         }
     }
+
+    const cmdMatch = node.text.match(/^(\s*)-\s*(~?[a-zA-Z0-9_]+)/);
+    if (cmdMatch) {
+        const cmdNameStart = node.text.indexOf(cmdMatch[2]);
+        const cmdNameEnd = cmdNameStart + cmdMatch[2].length;
+        
+        if (pos.position.character >= cmdNameStart && pos.position.character <= cmdNameEnd) {
+            const cmdMeta = db.getCommand(node.name);
+            if (cmdMeta && cmdMeta.sourceFile) {
+                const SRC_DIR = path.join(globalStoragePath, 'corex_src_cache');
+                const absolutePath = path.resolve(SRC_DIR, cmdMeta.sourceFile);
+                if (fs.existsSync(absolutePath)) {
+                    return Location.create(pathToFileURL(absolutePath).toString(), {
+                        start: { line: cmdMeta.sourceLine!, character: 0 },
+                        end: { line: cmdMeta.sourceLine!, character: 0 }
+                    });
+                }
+            }
+        }
+    }
     
     const allTags = extractAllTagsGlobal(doc.getText());
     const tags = allTags.filter(t => offset >= t.start - 1 && offset <= t.end + 1);

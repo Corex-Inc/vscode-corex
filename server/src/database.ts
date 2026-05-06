@@ -23,29 +23,31 @@ export interface MetaItem {
     usage?: string;
     parsedSwitches?: { name: string, desc: string }[];
     parsedContexts?: { name: string, desc: string, returnType: string }[];
+    requiredArgs?: number;
+    maxArgs?: number;
+    shortDescription?: string;
+    parsedArgs?: { name: string, isFlag: boolean }[];
     [key: string]: any;
 }
 
 export class TagDatabase {
     baseObjects: Set<string> = new Set();
     typeMap: Map<string, MetaItem[]> = new Map();
-    commands: MetaItem[] = [];
+    commands: MetaItem[] =[];
     objectDocs: Map<string, MetaItem> = new Map();
-    formatters: MetaItem[] = [];
+    formatters: MetaItem[] =[];
     events: MetaItem[] = [];
 
     build(metaCache: MetaItem[]) {
         this.baseObjects.clear();
         this.typeMap.clear();
-        this.commands = [];
+        this.commands =[];
         this.objectDocs.clear();
         this.formatters = [];
-        this.events = [];
+        this.events =[];
 
         for (const item of metaCache) {
-            if (item.type === 'command') {
-                this.commands.push(item);
-            } else if (item.type === 'object') {
+            if (item.type === 'object') {
                 this.objectDocs.set(item.name.toLowerCase(), item);
             } else if (item.type === 'formatter') {
                 item.name = cleanTagName(item.name);
@@ -121,7 +123,7 @@ export class TagDatabase {
                         return { name: match ? match[1] : l.split(':')[0], desc: l };
                     });
                 } else {
-                    item.parsedSwitches = [];
+                    item.parsedSwitches =[];
                 }
                 if (item.context && typeof item.context === 'string') {
                     item.parsedContexts = item.context.split('\n').filter(l => l.trim().length > 0).map(l => {
@@ -136,15 +138,41 @@ export class TagDatabase {
                         return { name, desc, returnType };
                     });
                 } else {
-                    item.parsedContexts = [];
+                    item.parsedContexts =[];
                 }
                 this.events.push(item);
+                
+            } else if (item.type === 'command') {
+                if (item.syntax) {
+                    item.parsedArgs = [];
+                    const argRegex = /\(([a-zA-Z0-9_]+)(:[^)]*)?\)/g;
+                    let match;
+                    while ((match = argRegex.exec(item.syntax)) !== null) {
+                        const name = match[1];
+                        const isFlag = !match[2];
+                        item.parsedArgs.push({ name: isFlag ? name : name + ':', isFlag });
+                    }
+                }
+                
+                if (item.requiredargs !== undefined) item.requiredArgs = parseInt(item.requiredargs);
+                if (item.maxargs !== undefined) item.maxArgs = parseInt(item.maxargs);
+                item.shortDescription = item.shortdescription;
+
+                this.commands.push(item);
             }
         }
     }
 
     getProperties(type: string): MetaItem[] {
         return this.typeMap.get(type.toLowerCase()) ||[];
+    }
+
+    getCommand(name: string): MetaItem | undefined {
+        const lowerName = name.toLowerCase();
+        return this.commands.find(c => 
+            c.name.toLowerCase() === lowerName || 
+            (c.aliases && c.aliases.includes(lowerName))
+        );
     }
 }
 

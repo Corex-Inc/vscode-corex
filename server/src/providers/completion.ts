@@ -4,6 +4,7 @@ import { db } from '../database';
 import { extractTagBeforeCursor, splitTagChain, resolveTagType } from '../utils';
 import { parseAST } from '../ast';
 import { eventRegistry } from './events';
+import { commandRegistry } from './commands';
 
 export function handleCompletion(pos: TextDocumentPositionParams, documents: TextDocuments<TextDocument>): CompletionItem[] {
     const doc = documents.get(pos.textDocument.uri);
@@ -150,7 +151,6 @@ export function handleCompletion(pos: TextDocumentPositionParams, documents: Tex
         } else {
             if (parts[0].toLowerCase() === 'context') {
                 let parentEventMeta = null;
-                // Ищем родительский ивент, отступая вверх по строкам
                 const currentIndent = doc.getText({ start: { line: pos.position.line, character: 0 }, end: { line: pos.position.line + 1, character: 0 } }).match(/^(\s*)/)?.[1].length || 0;
                 for (let i = pos.position.line - 1; i >= 0; i--) {
                     const l = doc.getText({ start: { line: i, character: 0 }, end: { line: i + 1, character: 0 } });
@@ -165,7 +165,6 @@ export function handleCompletion(pos: TextDocumentPositionParams, documents: Tex
                     }
                     if (ind === 0 && l.trim() !== '') break;
                 }
-                // Если мы пишем <context.[СЮДА]>, то выдаем варианты
                 if (parts.length === 2 && parentEventMeta) {
                     completions.push(...eventRegistry.getContextCompletions(parentEventMeta));
                     return completions;
@@ -208,11 +207,15 @@ export function handleCompletion(pos: TextDocumentPositionParams, documents: Tex
             }
         }
     } else {
-        const cmdMatch = linePrefix.match(/^\s*-\s*([a-zA-Z0-9_]*)$/);
+        const cmdMatch = linePrefix.match(/^\s*-\s*(~?[a-zA-Z0-9_]*)$/);
         if (cmdMatch) {
-            db.commands.forEach(item => {
-                completions.push({ label: item.name.toLowerCase(), kind: CompletionItemKind.Keyword, documentation: item.description });
-            });
+            return commandRegistry.getCommandCompletions();
+        }
+        
+        const cmdWithArgsMatch = linePrefix.match(/^\s*-\s*~?([a-zA-Z0-9_]+)\s+(.*)$/);
+        if (cmdWithArgsMatch) {
+            const cmdName = cmdWithArgsMatch[1];
+            return commandRegistry.getArgumentCompletions(cmdName);
         }
     }
     return completions;

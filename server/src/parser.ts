@@ -156,6 +156,10 @@ function parseBlock(type: string, blockText: string, sourceFile: string, sourceL
         switches: rawResult.switches,
         context: rawResult.context,
         usage: rawResult.usage,
-        cancellable: rawResult.cancellable !== undefined
+        cancellable: rawResult.cancellable !== undefined,
+        requiredargs: rawResult.requiredargs,
+        maxargs: rawResult.maxargs,
+        shortdescription: rawResult.shortdescription,
+        aliases: rawResult.aliases ? rawResult.aliases.split(',').map((a: string) => a.trim().toLowerCase()) :[]
     }];
 }

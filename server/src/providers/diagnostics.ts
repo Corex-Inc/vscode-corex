@@ -4,6 +4,7 @@ import { parseAST } from '../ast';
 import { db } from '../database';
 import { resolveTagType, splitTagChain, stripArgs } from '../utils';
 import { eventRegistry } from './events';
+import { splitCommandArgs } from './commands';
 
 class ContainerState {
     definedVars = new Map<string, { line: number, startChar: number, endChar: number, isImplicit: boolean, source: 'def' | 'loop' | 'definition' }>(); 
@@ -137,6 +138,64 @@ export function getDiagnostics(doc: TextDocument): Diagnostic[] {
                             }
                         }
                     }
+                }
+            }
+        }
+
+        if (node.name !== 'on' && node.name !== 'after' && node.text.trim().startsWith('-')) {
+            const cmdMeta = db.getCommand(node.name)
+            
+            if (cmdMeta) {
+                let textNoComment = node.text.split('//')[0].split('#')[0].trimEnd();
+                
+                if (textNoComment.endsWith(':')) {
+                    textNoComment = textNoComment.slice(0, -1).trimEnd();
+                }
+
+                const args = splitCommandArgs(textNoComment);
+                const providedCount = Math.max(0, args.length - 1);
+                
+                if (cmdMeta.requiredArgs !== undefined && cmdMeta.requiredArgs !== -1 && providedCount < cmdMeta.requiredArgs) {
+                    const match = node.text.match(new RegExp(`-\\s*~?${node.name}`, 'i'));
+                    const startChar = match ? match.index! + match[0].length - node.name.length : 0;
+                    diagnostics.push({
+                        severity: DiagnosticSeverity.Error,
+                        range: { start: { line: node.line, character: startChar }, end: { line: node.line, character: startChar + node.name.length } },
+                        message: `Command '${node.name}' requires at least ${cmdMeta.requiredArgs} argument(s), but got ${providedCount}.`,
+                        source: "Corex LSP"
+                    });
+                }
+                
+                if (cmdMeta.maxArgs !== undefined && cmdMeta.maxArgs !== -1 && providedCount > cmdMeta.maxArgs) {
+                    diagnostics.push({
+                        severity: DiagnosticSeverity.Error,
+                        range: { start: { line: node.line, character: 0 }, end: { line: node.line, character: node.text.length } },
+                        message: `Command '${node.name}' accepts a maximum of ${cmdMeta.maxArgs} argument(s), but got ${providedCount}.`,
+                        source: "Corex LSP"
+                    });
+                }
+
+                for (let k = 1; k < args.length; k++) {
+                    const arg = args[k];
+                    if (arg.text.endsWith(':')) {
+                        diagnostics.push({
+                            severity: DiagnosticSeverity.Error,
+                            range: { start: { line: node.line, character: arg.start }, end: { line: node.line, character: arg.end } },
+                            message: `Empty argument: '${arg.text}'. You must provide a value.`,
+                            source: "Corex LSP"
+                        });
+                    }
+                }
+            } else {
+                if (node.name !== 'case' && node.name !== 'default' && node.name !== 'else') {
+                    const match = node.text.match(new RegExp(`-\\s*~?${node.name}`, 'i'));
+                    const startChar = match ? match.index! + match[0].length - node.name.length : 0;
+                    diagnostics.push({
+                        severity: DiagnosticSeverity.Error,
+                        range: { start: { line: node.line, character: startChar }, end: { line: node.line, character: startChar + node.name.length } },
+                        message: `Unknown command '${node.name}'.`,
+                        source: "Corex LSP"
+                    });
                 }
             }
         }
