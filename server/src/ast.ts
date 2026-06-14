@@ -23,18 +23,29 @@ export interface CommandNode {
 export function parseAST(doc: TextDocument): CommandNode[] {
     const text = doc.getText();
     const lines = text.split('\n');
-    const nodes: CommandNode[] =[];
+    const nodes: CommandNode[] = [];
     
     const allTags = extractAllTagsGlobal(text);
     
     let currentContainer = "global";
     let pathStack: {name: string, indent: number}[] = [{name: "global", indent: 0}];
+    let inBlockComment = false;
 
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
+        const trimmed = line.trim();
         const lineOffset = doc.offsetAt({ line: i, character: 0 });
 
-        if (line.trim().startsWith('//') || line.trim().startsWith('/*') || line.trim().startsWith('*')) continue;
+        if (trimmed.startsWith('/*')) inBlockComment = true;
+        
+        if (inBlockComment) {
+            if (trimmed.includes('*/')) inBlockComment = false;
+            continue;
+        }
+
+        if (trimmed.startsWith('//') || trimmed.startsWith('*')) continue;
+
+        if (trimmed === "") continue;
 
         const keyMatch = line.match(/^(\s*)([a-zA-Z0-9_-]+):\s*(?:#.*|\/\/.*)?$/);
         if (keyMatch && !line.trim().startsWith('-')) {
@@ -72,12 +83,11 @@ export function parseAST(doc: TextDocument): CommandNode[] {
         if (cmdMatch) {
             const indent = cmdMatch[1].length;
             const cmdName = cmdMatch[2].replace('~', '').toLowerCase();
-            const cleanText = line.split('//')[0].trim();
+            
+            const cleanText = line.split('//')[0].split('#')[0].trim();
             
             const lineEndOffset = doc.offsetAt({ line: i, character: line.length });
             const tagsInThisLine = allTags.filter(t => t.start >= lineOffset && t.start <= lineEndOffset);
-
-            const currentPath = pathStack.map(p => p.name).join('.');
 
             const node: CommandNode = {
                 name: cmdName,
@@ -125,15 +135,31 @@ export function parseAST(doc: TextDocument): CommandNode[] {
 
 export function extractAllTagsGlobal(text: string): Token[] {
     const tags: Token[] = [];
-    const starts: number[] =[];
+    const starts: number[] = [];
+    let inBlockComment = false;
+    let inLineComment = false;
 
     for (let i = 0; i < text.length; i++) {
-        if (text[i] === '/' && text[i+1] === '/') {
-            while (i < text.length && text[i] !== '\n') i++;
+        if (!inLineComment && !inBlockComment && text[i] === '/' && text[i + 1] === '*') {
+            inBlockComment = true;
+            i++; continue;
+        }
+        if (inBlockComment && text[i] === '*' && text[i + 1] === '/') {
+            inBlockComment = false;
+            i++; continue;
+        }
+        if (!inBlockComment && !inLineComment && text[i] === '/' && text[i + 1] === '/') {
+            inLineComment = true;
+            i++; continue;
+        }
+        if (inLineComment && text[i] === '\n') {
+            inLineComment = false;
             continue;
         }
 
-        if (text[i] === '<') {
+        if (inBlockComment || inLineComment) continue;
+
+        if (text[i] === '<' && (isTagStart(text, i) || starts.length > 0)) {
             starts.push(i);
         } else if (text[i] === '>') {
             if (starts.length > 0) {
@@ -147,4 +173,10 @@ export function extractAllTagsGlobal(text: string): Token[] {
         }
     }
     return tags;
+}
+
+function isTagStart(text: string, i: number): boolean {
+    if (i + 1 >= text.length) return false;
+    const next = text[i + 1];
+    return /[a-zA-Z_\[#&]/.test(next);
 }

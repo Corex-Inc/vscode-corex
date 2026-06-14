@@ -1,13 +1,14 @@
 import { TagDatabase } from './database';
 import { CommandNode } from './ast';
-
+import { Position } from 'vscode-languageserver/node';
+import { TextDocument } from 'vscode-languageserver-textdocument';
 
 export function cleanTagName(name: string): string {
     return name.replace(/<|>/g, '').split('[')[0];
 }
 
 export function splitTagChain(tagContent: string): string[] {
-    const parts: string[] =[];
+    const parts: string[] = [];
     let current = "";
     let depth = 0;
     for (let i = 0; i < tagContent.length; i++) {
@@ -59,18 +60,40 @@ export function extractTagBeforeCursor(line: string): string | null {
     return null;
 }
 
-export function resolveTagType(tagContent: string, ast: CommandNode[], container: string, db: TagDatabase, stopIndex?: number, visitedVars = new Set<string>()): string {
+function parseGenerics(rawType: string): { base: string, inner: string | null } {
+    const match = rawType.match(/^([a-zA-Z0-9_]+?)(?:Tag)?(?:\((.*?)\))?$/i);
+    if (!match) return { base: 'ObjectTag', inner: null };
+    
+    let base = match[1].charAt(0).toUpperCase() + match[1].slice(1).toLowerCase() + 'Tag';
+    let inner = match[2] || null;
+
+    if (inner && inner.includes(',')) {
+        inner = inner.split(',').pop()!.trim(); 
+    }
+    return { base, inner };
+}
+
+function guessInnerType(argsStr: string, ast: CommandNode[], container: string, db: TagDatabase, visitedVars: Set<string>): string {
+    const firstTagMatch = argsStr.match(/<([^>]+)>/);
+    if (firstTagMatch) {
+        return resolveTagType(firstTagMatch[1], ast, container, db, undefined, visitedVars);
+    }
+    return 'ElementTag';
+}
+
+function internalResolveTagType(tagContent: string, ast: CommandNode[], container: string, db: TagDatabase, stopIndex?: number, visitedVars = new Set<string>()): { base: string, inner: string | null } {
     const parts = splitTagChain(tagContent);
-    if (parts.length === 0) return 'ObjectTag';
+    if (parts.length === 0) return { base: 'ObjectTag', inner: null };
 
     let currentType = 'ObjectTag';
+    let innerType: string | null = null;
     const getCleanName = (part: string) => stripArgs(part).split('||')[0].toLowerCase();
     const limit = stopIndex !== undefined ? stopIndex : parts.length;
 
     if (parts[0].startsWith('[')) {
         const varName = parts[0].substring(1, parts[0].indexOf(']'));
         
-        if (visitedVars.has(varName)) return 'ObjectTag'; 
+        if (visitedVars.has(varName)) return { base: 'ObjectTag', inner: null }; 
         visitedVars.add(varName);
 
         if (varName === 'loopIndex' || varName === 'key') {
@@ -94,8 +117,11 @@ export function resolveTagType(tagContent: string, ast: CommandNode[], container
             if (isRepeatAlias) {
                 currentType = 'ElementTag';
             } else if (definedValue) {
-                if (definedValue.startsWith('<') && definedValue.endsWith('>')) {
-                    currentType = resolveTagType(definedValue.substring(1, definedValue.length - 1), ast, container, db, undefined, visitedVars);
+                const tagMatch = definedValue.match(/<([^>]+)>/);
+                if (tagMatch) {
+                    const res = internalResolveTagType(tagMatch[1], ast, container, db, undefined, visitedVars);
+                    currentType = res.base;
+                    innerType = res.inner;
                 } else {
                     currentType = 'ElementTag'; 
                 }
@@ -105,10 +131,17 @@ export function resolveTagType(tagContent: string, ast: CommandNode[], container
         const baseObjName = getCleanName(parts[0]);
         const fmt = db.formatters.find(f => f.name.toLowerCase() === baseObjName);
         if (fmt) {
-            currentType = (fmt.returnType || 'ElementTag').replace(/\(.*?\)/g, '').trim();
+            const parsed = parseGenerics(fmt.returnType || 'ElementTag');
+            currentType = parsed.base;
+            innerType = parsed.inner;
         } else {
             const typeName = baseObjName.charAt(0).toUpperCase() + baseObjName.slice(1) + 'Tag';
             currentType = db.objectDocs.has(typeName.toLowerCase()) ? typeName : 'ObjectTag';
+        }
+
+        const argsMatch = parts[0].match(/\[(.*?)\]/);
+        if (argsMatch && (baseObjName === 'list' || baseObjName === 'map')) {
+            innerType = guessInnerType(argsMatch[1], ast, container, db, visitedVars);
         }
     }
 
@@ -119,24 +152,66 @@ export function resolveTagType(tagContent: string, ast: CommandNode[], container
         const asMatch = propName.match(/^as\[(.*?)\]$/i);
         if (asMatch) {
             currentType = asMatch[1].charAt(0).toUpperCase() + asMatch[1].toLowerCase().slice(1) + 'Tag';
+            innerType = null;
             continue;
         }
 
-        const props = db.getProperties(currentType) ||[];
-        const found = props.find(m => m.name.toLowerCase() === propName);
+        const extractors = ['random', 'get', 'first', 'last', 'highest', 'lowest', 'value'];
+        if (['ListTag', 'MapTag'].includes(currentType) && extractors.includes(propName) && innerType) {
+            currentType = innerType; 
+            innerType = null;
+            continue;
+        }
 
-        if (found) {
-            currentType = (found.returnType || 'ElementTag').replace(/\(.*?\)/g, '').trim();
-        } else if (currentType === 'ObjectTag') {
-            let foundInGlobal = 'ElementTag';
+        const props = db.getProperties(currentType) || [];
+        let found = props.find(m => m.name.toLowerCase() === propName);
+
+        if (!found && currentType === 'ObjectTag') {
             for (const base of db.baseObjects) {
                 const tName = base.charAt(0).toUpperCase() + base.slice(1) + 'Tag';
-                const p = (db.getProperties(tName) ||[]).find(m => m.name.toLowerCase() === propName);
-                if (p) { foundInGlobal = p.returnType || 'ElementTag'; break; }
+                const p = (db.getProperties(tName) || []).find(m => m.name.toLowerCase() === propName);
+                if (p) { found = p; break; }
             }
-            currentType = foundInGlobal.replace(/\(.*?\)/g, '').trim();
+        }
+
+        if (found) {
+            const parsed = parseGenerics(found.returnType || 'ElementTag');
+            currentType = parsed.base;
+            innerType = parsed.inner;
+        } else {
+            currentType = 'ObjectTag';
+            innerType = null;
         }
     }
 
-    return currentType;
+    return { base: currentType, inner: innerType };
+}
+
+export function resolveTagType(tagContent: string, ast: CommandNode[], container: string, db: TagDatabase, stopIndex?: number, visitedVars = new Set<string>()): string {
+    return internalResolveTagType(tagContent, ast, container, db, stopIndex, visitedVars).base;
+}
+
+export function isPositionInComment(doc: TextDocument, position: Position): boolean {
+    const text = doc.getText();
+    const offset = doc.offsetAt(position);
+    
+    const textBeforeCursor = text.substring(0, offset);
+    
+    const lastOpenBlockIdx = textBeforeCursor.lastIndexOf('/*');
+    const lastCloseBlockIdx = textBeforeCursor.lastIndexOf('*/');
+    
+    if (lastOpenBlockIdx > lastCloseBlockIdx) {
+        return true;
+    }
+
+    const lastNewlineIdx = textBeforeCursor.lastIndexOf('\n');
+    const linePrefix = textBeforeCursor.substring(lastNewlineIdx + 1);
+    
+    const withoutStrings = linePrefix.replace(/"[^"]*"/g, '').replace(/'[^']*'/g, '');
+    
+    if (withoutStrings.includes('//')) {
+        return true;
+    }
+
+    return false;
 }

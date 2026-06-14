@@ -2,25 +2,35 @@
   "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
   "name": "Corex",
   "scopeName": "source.corex",
-  "patterns":[
+  "patterns": [
     { "include": "#comments" },
     { "include": "#strings" },
+    { "include": "#tags" },
+    { "include": "#events-definition" },
     { "include": "#yaml-keys" },
     { "include": "#definitions" },
+    { "include": "#operators" },
     { "include": "#commands" },
     { "include": "#foreach-as" },
-    { "include": "#events-definition" },
     { "include": "#types" },
-    { "include": "#tags" }
+    { "include": "#parens" }
   ],
   "repository": {
+    "operators": {
+      "match": "(===|==|!=|>=|<=|>|<|&&|\\|\\||!|\\+|\\-|\\*|\\/|%|\\bcontains\\b)",
+      "name": "keyword.operator.corex"
+    },
+    "parens": {
+      "match": "[()]",
+      "name": "punctuation.definition.parameters.corex"
+    },
     "comments": {
-      "patterns":[
+      "patterns": [
         {
           "begin": "/\\*",
           "end": "\\*/",
           "name": "comment.block.corex",
-          "patterns":[
+          "patterns": [
             { "match": "\\b(TODO|FIXME|XXX)\\b", "name": "keyword.todo.corex" }
           ]
         },
@@ -28,27 +38,14 @@
           "begin": "(//)",
           "end": "$",
           "name": "comment.line.corex",
-          "patterns":[
+          "patterns": [
             { "match": "\\b(TODO|FIXME|XXX)\\b", "name": "keyword.todo.corex" }
           ]
         }
-      ],
-      "lineComment": "//",
-      "blockComment": ["/*", "*/"]
+      ]
     },
-    "onEnterRules": [
-        {
-            "beforeText": { "pattern": "^\\s*\\/\\*\\*(?!\\/)([^\\*]|\\*(?!\\/))*$" },
-            "afterText": { "pattern": "^\\s*\\*\\/$" },
-            "action": { "indent": "indentOutdent", "appendText": " * " }
-        },
-        {
-            "beforeText": { "pattern": "^\\s*\\*([^\\/]|\\*(?!\\/))*$" },
-            "action": { "indent": "none", "appendText": "* " }
-        }
-    ],
     "strings": {
-      "patterns":[
+      "patterns": [
         {
           "begin": "\"",
           "end": "\"",
@@ -58,7 +55,7 @@
       ]
     },
     "yaml-keys": {
-      "match": "^\\s*([a-zA-Z0-9_]+)\\s*:",
+      "match": "^\\s*([a-zA-Z0-9_][a-zA-Z0-9_\\s]*?)\\s*:",
       "captures": {
         "1": { "name": "entity.name.tag.yaml.corex" }
       }
@@ -89,12 +86,12 @@
       }
     },
     "tags": {
-      "begin": "<",
+      "begin": "<(?=[a-zA-Z_\\[#&])",
       "beginCaptures": { "0": { "name": "punctuation.definition.tag.begin.corex" } },
       "end": ">",
       "endCaptures": { "0": { "name": "punctuation.definition.tag.end.corex" } },
       "name": "meta.tag.corex",
-      "patterns":[
+      "patterns": [
         {
           "match": "\\G(\\[)([a-zA-Z0-9_]+)(\\])",
           "captures": {
@@ -104,7 +101,7 @@
           }
         },
         {
-          "match": "\\G\\s*([a-zA-Z0-9_]+)",
+          "match": "\\G\\s*([a-zA-Z0-9_#&]+)",
           "name": "support.class.corex"
         },
         { "include": "#brackets" },

@@ -4,7 +4,7 @@ import fetch from 'node-fetch';
 import AdmZip from 'adm-zip';
 import { db, MetaItem } from './database';
 import { globalStoragePath } from './server';
-import { eventRegistry } from './providers/events';
+import { eventRegistry } from './services/events';
 
 const getCacheFile = () => path.join(globalStoragePath, 'corex_cache.json');
 const getSrcDir = () => path.join(globalStoragePath, 'corex_src_cache');
@@ -92,24 +92,37 @@ function parseBlock(type: string, blockText: string, sourceFile: string, sourceL
     let buffer: string[] =[];
 
     for (const line of lines) {
-        let cleanLine = line.trim();
-        if (cleanLine.startsWith('/*')) cleanLine = cleanLine.substring(2).trim();
-        if (cleanLine.endsWith('*/')) cleanLine = cleanLine.substring(0, cleanLine.length - 2).trim();
-        if (cleanLine.startsWith('*')) cleanLine = cleanLine.substring(1).trim();
+        let cleanLine = line.trimRight(); // Use trimRight to avoid removing leading whitespace
+        const leadingSpaceMatch = cleanLine.match(/^\s*/);
+        const leadingSpace = leadingSpaceMatch ? leadingSpaceMatch[0] : '';
+        let stripped = cleanLine.substring(leadingSpace.length);
         
-        if (cleanLine.startsWith('@')) {
+        if (stripped.endsWith('*/')) stripped = stripped.substring(0, stripped.length - 2).trimRight();
+        
+        if (stripped.startsWith('/*')) stripped = stripped.substring(stripped.startsWith('/**') ? 3 : 2).trimLeft();
+        else if (stripped.startsWith('*')) {
+            stripped = stripped.substring(1);
+            if (stripped.startsWith(' ')) {
+                stripped = stripped.substring(1);
+            }
+        }
+        
+        cleanLine = stripped;
+        
+        const trimmedCmd = cleanLine.trimLeft();
+        if (trimmedCmd.startsWith('@')) {
             if (currentTag) {
                 const joined = buffer.join('\n').trim();
                 if (rawResult[currentTag]) rawResult[currentTag] += '\n\n' + joined;
                 else rawResult[currentTag] = joined;
             }
-            const spaceIdx = cleanLine.indexOf(' ');
+            const spaceIdx = trimmedCmd.indexOf(' ');
             if (spaceIdx === -1) {
-                currentTag = cleanLine.substring(1).toLowerCase();
+                currentTag = trimmedCmd.substring(1).toLowerCase();
                 buffer =[];
             } else {
-                currentTag = cleanLine.substring(1, spaceIdx).toLowerCase();
-                buffer =[cleanLine.substring(spaceIdx + 1).trim()];
+                currentTag = trimmedCmd.substring(1, spaceIdx).toLowerCase();
+                buffer =[trimmedCmd.substring(spaceIdx + 1)]; // Don't trimLeft to preserve indent after tag
             }
         } else if (currentTag) { 
             buffer.push(cleanLine);
@@ -117,8 +130,8 @@ function parseBlock(type: string, blockText: string, sourceFile: string, sourceL
     }
 
     if (currentTag) {
-        if (rawResult[currentTag]) rawResult[currentTag] += '\n\n' + buffer.join('  \n').trim();
-        else rawResult[currentTag] = buffer.join('  \n').trim();
+        if (rawResult[currentTag]) rawResult[currentTag] += '\n\n' + buffer.join('\n').trim();
+        else rawResult[currentTag] = buffer.join('\n').trim();
     }
     
     if (!rawResult.name) return[];

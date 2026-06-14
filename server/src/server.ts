@@ -2,12 +2,12 @@ import { createConnection, TextDocuments, ProposedFeatures, InitializeParams, Te
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { db } from './database';
 import { loadOrUpdateCache } from './parser';
-import { getDiagnostics } from './providers/diagnostics';
-import { handleCompletion } from './providers/completion';
-import { handleHover } from './providers/hover';
-import { handleCodeAction } from './providers/codeActions';
-import { handleDefinition } from './providers/definition';
-import { handleRename } from './providers/rename';
+import { getDiagnostics } from './diagnostics/index';
+import { handleCompletion } from './completions/index';
+import { handleHover } from './hovers/index';
+import { handleCodeAction } from './code-actions/index';
+import { handleDefinition } from './definitions/index';
+import { handleRename } from './renames/index';
 
 const connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
@@ -42,7 +42,7 @@ connection.onRenameRequest((params) => {
 connection.onRequest("corex/reloadDocs", async () => {
     try {
         await loadOrUpdateCache(true);
-        return db.typeMap.size;
+        return db.baseObjects.size + db.events.length + db.commands.length + db.formatters.length + db.typeMap.size;
     } catch (error: any) {
         throw new Error(error.message || "Unknown ERROR");
     }
